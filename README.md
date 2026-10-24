@@ -73,3 +73,12 @@ De enquête is bedoeld voor constructieve feedback over OPTSCH als geheel, niet 
 - Beheerders kunnen ook niet-gemarkeerde antwoorden controleren; automatische herkenning is niet volledig en kan zowel iets missen als onschuldige kritiek markeren.
 - De beveiligde reviewinterface toont de oorspronkelijke tekst; normale rapportages en CSV's tonen alleen goedgekeurde of niet-gemarkeerde antwoorden.
 - Geen betaalde AI-dienst nodig: het huidige systeem gebruikt transparante tekstherkenning met vaste patronen. Pas op voor fout-positieven en gemiste beledigingen, en controleer alle vrije reacties handmatig vóór externe rapportage.
+
+
+## Automatisch bijgewerkte namencontrole
+
+De vragen met vrije tekst worden door de server automatisch gescand op mogelijke persoonlijke aanvallen en herkenbare spelersnamen. De namenlijst wordt **niet handmatig gesynchroniseerd**: bij iedere nieuwe inzending en iedere resultatenopvraag haalt de `optsch-survey` Edge Function de actuele naamvelden rechtstreeks op uit `public.players` (`name`, `preferred_name`), `public.player_aliases` (`alias_name`) en eventuele aanvullende namen in `public.optsch_survey_name_blacklist`. Hierdoor worden nieuwe Ranking-spelers en aliassen meteen bij volgende controles meegenomen.
+
+De spelersnamen worden uitsluitend in het tijdelijke servergeheugen gebruikt, nooit met de openbare website gedeeld of aan PlayerID/ingezonden antwoorden gekoppeld. In `auto_flags` worden alleen neutrale signalen opgeslagen, bijvoorbeeld ‘Mogelijke vermelding van spelersnaam of alias’, zonder de gematchte naam.
+
+Het systeem markeert een naamvermelding voor handmatige beoordeling; een naam noemen is niet per definitie kwetsend. Het kan soms ook gewone Nederlandse woorden markeren. De beheerder beoordeelt daarom de context. Ook uitsluitingen gelden per open antwoord en niet per volledige enquête.
