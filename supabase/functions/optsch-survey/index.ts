@@ -6,9 +6,14 @@ const PUB = Deno.env.get("SUPABASE_ANON_KEY")!;
 const adminDb = createClient(SUPABASE_API_URL, SERVICE, {auth:{persistSession:false}});
 const cors = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,apikey,content-type","Access-Control-Allow-Methods":"GET,POST,OPTIONS","Content-Type":"application/json"};
 const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
-const questionIds = Array.from({length:24},(_,i)=>"q"+(i+1));
+const FOLLOWUPS=[{"id":"q25","parent":"q5","values":["Ik speel minder vaak","Ik ben gestopt","Mijn deelname wisselt","Ik heb niet gespeeld"],"label":"Wat zou OPTSCH kunnen veranderen zodat je (weer) vaker zou willen spelen?"},{"id":"q26","parent":"q7","values":["Speeldagen","Aanvangstijden"],"label":"Welke speeldagen of starttijden zouden jou beter uitkomen?"},{"id":"q27","parent":"q7","values":["Kosten of inleg"],"label":"Welke verandering aan de kosten of inleg zou voor jou verschil maken?"},{"id":"q28","parent":"q7","values":["Pokerapp"],"label":"Wat werkt voor jou niet goed in de pokerapp en wat zou je liever zien?"},{"id":"q29","parent":"q8","values":["1 - Zeer ontevreden","2"],"label":"Wat moet OPTSCH als eerste verbeteren om jouw tevredenheid te vergroten?"},{"id":"q30","parent":"q10","values":["Negatief","Zeer negatief"],"label":"Wat kan er in de onderlinge sfeer verbeteren? Beschrijf situaties zonder spelers te noemen."},{"id":"q31","parent":"q12","values":["Eerlijkheid en transparantie","Regels"],"label":"Waarover wil je meer duidelijkheid, eerlijkheid of transparantie?"},{"id":"q32","parent":"q14","values":["Wisselend","Vaak onduidelijk of oneerlijk"],"label":"Bij welke regels of afspraken mis je duidelijkheid?"},{"id":"q33","parent":"q16","values":["1 - Zeer ontevreden","2"],"label":"Welke informatie mis je of ontvang je te laat?"},{"id":"q34","parent":"q18","values":["Meestal niet","Nee"],"label":"Hoe kan OPTSCH beter laten zien dat er naar spelers wordt geluisterd?"},{"id":"q35","parent":"q21","values":["Meer pokervarianten","Nieuwe toernooivormen","Bijzondere evenementen","Teamactiviteiten"],"label":"Welke concrete spelvariant, toernooivorm of activiteit zou je graag zien?"}];
+const questionIds = Array.from({length:35},(_,i)=>"q"+(i+1));
+function followupActive(f:{id:string,parent:string,values:string[]},a:Record<string,unknown>){
+ const v=a[f.parent];const selected=Array.isArray(v)?v:[v];
+ return selected.some(x=>typeof x==="string"&&f.values.includes(x));
+}
 
-const OPEN_QUESTION_IDS=["q6","q9","q11","q13","q15","q20","q23","q24"];
+const OPEN_QUESTION_IDS=["q6","q9","q11","q13","q15","q20","q23","q24",...FOLLOWUPS.map(f=>f.id)];
 function detectPersonalAttacks(answers:Record<string,unknown>){
   const flags:Record<string,string>={};
   const abuse=/\b(idioot|idioten|sukkel|sukkels|debiel|debielen|mongool|mongolen|klootzak|klootzakken|etterbak|etterbakken|achterlijk|waardeloos|domkop|domme\s+(?:speler|gast|vent|vrouw)|oplichter|fraudeur|bedrieger)\b/i;
@@ -71,7 +76,7 @@ const COMMON_WORD_NAMES=new Set(["ben","wil","had","was","mag","kan","van","met"
 function detectNameMentions(answers:Record<string,unknown>,names:string[]){
  const flags:Record<string,string>={};
  const patterns=names.map(name=>{
-   const escaped=name.replace(/[.*+?^$()|[\]{}]/g,"\\async function isAdmin(req:Request) {").replace(/\s+/g,"\\s+");
+   const escaped = Array.from(name).map(c => ".*+?^$()[]{}|\\".includes(c) ? "\\" + c : c).join("").replace(/\s+/g, "\\s+");
    const common=COMMON_WORD_NAMES.has(name.toLowerCase());
    return new RegExp("(?:^|[^\\p{L}\\p{N}])"+escaped+"(?=$|[^\\p{L}\\p{N}])",common?"u":"iu");
  });
@@ -120,6 +125,10 @@ Deno.serve(async(req)=>{
       if(typeof v!=="string" && !Array.isArray(v)) return reply({error:"Ongeldig antwoord: "+k},400);
       if(typeof v==="string" && v.length>3000) return reply({error:"Antwoord te lang"},400);
       if(Array.isArray(v) && (v.length>12 || v.some(s=>typeof s!=="string"||s.length>150)))return reply({error:"Ongeldige keuze"},400);
+    }
+    for(const f of FOLLOWUPS){
+      if(a[f.id]!==undefined && (!followupActive(f,a) || typeof a[f.id]!=="string"))
+        return reply({error:"Ongeldig antwoord op verborgen vervolgvraag"},400);
     }
     const ns=[1,2,3,4].map(i=>Number(a["q"+i]));
     if(ns.some(n=>!Number.isInteger(n)||n<0||n>1000)||ns.some((n,i)=>i>0&&n<ns[i-1]))return reply({error:"Controleer de aantallen deelnames."},400);
