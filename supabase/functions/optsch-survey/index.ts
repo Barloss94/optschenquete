@@ -37,6 +37,56 @@ function detectPersonalAttacks(answers:Record<string,unknown>){
   return flags;
 }
 
+
+/**
+ * Controleer de actuele spelernamen direct via de Ranking database.
+ * Geen identificerende data wordt opgenomen in enquêteantwoorden of rapporten.
+ */
+async function loadServerOnlyNames():Promise<string[]> {
+ const [players,aliases,extra]=await Promise.all([
+   adminDb.from("players").select("name,preferred_name"),
+   adminDb.from("player_aliases").select("alias_name"),
+   adminDb.from("optsch_survey_name_blacklist").select("term")
+ ]);
+ if(players.error)throw new Error("Namencontrole: spelers ophalen mislukt");
+ if(aliases.error)throw new Error("Namencontrole: aliassen ophalen mislukt");
+ if(extra.error)throw new Error("Namencontrole: extra namen ophalen mislukt");
+ const names=new Set<string>();
+ const add=(v:unknown)=>{
+   if(typeof v!=="string")return;
+   const name=v.normalize("NFKD").replace(/\p{M}/gu,"").replace(/\s+/g," ").trim();
+   if(name.length>=3 && name.length<=100 && /\p{L}/u.test(name)) names.add(name);
+ };
+ for(const row of (players.data||[])){
+   for(const value of [row.name,row.preferred_name]){
+     add(value);
+     if(typeof value==="string"&&value.includes(" "))add(value.trim().split(/\s+/)[0]);
+   }
+ }
+ for(const row of (aliases.data||[]))add(row.alias_name);
+ for(const row of (extra.data||[]))add(row.term);
+ return [...names];
+}
+const COMMON_WORD_NAMES=new Set(["ben","wil","had","was","mag","kan","van","met","aan","mijn","hem","zij","haar","die","dat","maar","dus","wel","nog","meer","een","het","ook","nee","ja"]);
+function detectNameMentions(answers:Record<string,unknown>,names:string[]){
+ const flags:Record<string,string>={};
+ const patterns=names.map(name=>{
+   const escaped=name.replace(/[.*+?^$()|[\]{}]/g,"\\async function isAdmin(req:Request) {").replace(/\s+/g,"\\s+");
+   const common=COMMON_WORD_NAMES.has(name.toLowerCase());
+   return new RegExp("(?:^|[^\\p{L}\\p{N}])"+escaped+"(?=$|[^\\p{L}\\p{N}])",common?"u":"iu");
+ });
+ for(const q of OPEN_QUESTION_IDS){
+   const value=answers[q];
+   if(typeof value!=="string"||!value.trim())continue;
+   const text=value.normalize("NFKD").replace(/\p{M}/gu,"");
+   if(patterns.some(re=>re.test(text))) flags[q]="Mogelijke vermelding van spelersnaam of alias";
+ }
+ return flags;
+}
+function reviewFlags(a:Record<string,unknown>,names:string[]) {
+ return {...detectPersonalAttacks(a),...detectNameMentions(a,names)};
+}
+
 async function isAdmin(req:Request) {
  const token=(req.headers.get("Authorization")||"").replace(/^Bearer\s+/i,"");
  if(!token) return false;
@@ -77,7 +127,7 @@ Deno.serve(async(req)=>{
     for(const id of ["q12","q21","q22"])if((a[id]||[]).length>3)return reply({error:"Maximaal drie keuzes toegestaan."},400);
     const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id,is_open").eq("survey_year",2026).single();
     if(e||!s||(!testing&&!s.is_open))return reply({error:"De enquête is momenteel gesloten."},403);
-    const auto_flags=detectPersonalAttacks(a);
+    const auto_flags=reviewFlags(a,await loadServerOnlyNames());
     const {error}=await adminDb.from(testing?"optsch_survey_test_responses":"optsch_survey_responses").insert({survey_id:s.id,answers:a,auto_flags});
     if(error)throw error;
     return reply({ok:true,preview:testing},201);
@@ -89,19 +139,20 @@ Deno.serve(async(req)=>{
     if(e)throw e;
     const rows:{id:string,answers:Record<string,unknown>,excluded_questions:string[],approved_questions:string[],auto_flags:Record<string,string>}[]=[];
     const isTest=action==="test-results"||action==="test-moderation";
+    const currentNames=await loadServerOnlyNames();
     let from=0; const page=500;
     while(true){
       const {data,error}=await adminDb.from(isTest?"optsch_survey_test_responses":"optsch_survey_responses").select("id,answers,excluded_questions,approved_questions,auto_flags").eq("survey_id",s.id).order("created_at",{ascending:true}).range(from,from+page-1);
       if(error)throw error; rows.push(...(data||[])); if((data||[]).length<page)break; from+=page;
     }
     if(action==="moderation"||action==="test-moderation"){
-      return reply({count:rows.length,entries:rows.map(x=>({id:x.id,answers:x.answers,excluded_questions:x.excluded_questions||[],approved_questions:x.approved_questions||[],auto_flags:x.auto_flags||{}}))});
+      return reply({count:rows.length,entries:rows.map(x=>({id:x.id,answers:x.answers,excluded_questions:x.excluded_questions||[],approved_questions:x.approved_questions||[],auto_flags:{...(x.auto_flags||{}),...reviewFlags(x.answers,currentNames)}}))});
     }
     let pending_count=0;
     const answers=rows.map(x=>{
       const a={...x.answers};
       for(const q of (x.excluded_questions||[])) delete a[q];
-      for(const q of Object.keys(x.auto_flags||{})){
+      for(const q of Object.keys({...(x.auto_flags||{}),...reviewFlags(x.answers,currentNames)})){
         if(!(x.approved_questions||[]).includes(q)&&!(x.excluded_questions||[]).includes(q)){
           delete a[q];pending_count++;
         }
