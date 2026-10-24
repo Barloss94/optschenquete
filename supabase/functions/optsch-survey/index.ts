@@ -7,6 +7,36 @@ const adminDb = createClient(SUPABASE_API_URL, SERVICE, {auth:{persistSession:fa
 const cors = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,apikey,content-type","Access-Control-Allow-Methods":"GET,POST,OPTIONS","Content-Type":"application/json"};
 const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
 const questionIds = Array.from({length:24},(_,i)=>"q"+(i+1));
+
+const OPEN_QUESTION_IDS=["q6","q9","q11","q13","q15","q20","q23","q24"];
+function detectPersonalAttacks(answers:Record<string,unknown>){
+  const flags:Record<string,string>={};
+  const abuse=/\b(idioot|idioten|sukkel|sukkels|debiel|debielen|mongool|mongolen|klootzak|klootzakken|etterbak|etterbakken|achterlijk|waardeloos|domkop|domme\s+(?:speler|gast|vent|vrouw)|oplichter|fraudeur|bedrieger)\b/i;
+  const personal=/\b(speler|spelers|medespeler|mede-speler|die\s+(?:gast|vent|kerel|vrouw|persoon)|hij|zij|hem|haar|jij|jou|je|zijn\s+naam|haar\s+naam|pokermaat|voorzitter|beheerder|host)\b/i;
+  const accusation=/\b(fraudeert|bedriegt|steelt|liegt\s+altijd|manipuleert|valsspeelt)\b/i;
+  const namedAttack=/\b[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]{2,}\s+(?:is|was|blijft|zijn|liegt|bedriegt)\s+(?:een\s+)?(?:idioot|sukkel|debiel|klootzak|oplichter|fraudeur|bedrieger|achterlijk)\b/;
+  const namedPlayer=/\b(?:[Ss]peler|[Mm]edespeler)(?:\s+met\s+de\s+naam)?\s+[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]{2,}\b/;
+  for(const q of OPEN_QUESTION_IDS){
+    const answer=answers[q];
+    if(typeof answer!=="string"||!answer.trim())continue;
+    const sentences=answer.split(/(?<=[.!?;\n])\s+|\n+/);
+    let reason="";
+    for(const sentence of sentences){
+      if((personal.test(sentence)&&abuse.test(sentence))||namedAttack.test(sentence)){
+        reason="Mogelijke persoonlijke belediging";break;
+      }
+      if(personal.test(sentence)&&accusation.test(sentence)){
+        reason="Mogelijke persoonlijke beschuldiging";break;
+      }
+      if(namedPlayer.test(sentence)){
+        reason="Mogelijk identificeerbare speler genoemd";break;
+      }
+    }
+    if(reason)flags[q]=reason;
+  }
+  return flags;
+}
+
 async function isAdmin(req:Request) {
  const token=(req.headers.get("Authorization")||"").replace(/^Bearer\s+/i,"");
  if(!token) return false;
@@ -47,7 +77,8 @@ Deno.serve(async(req)=>{
     for(const id of ["q12","q21","q22"])if((a[id]||[]).length>3)return reply({error:"Maximaal drie keuzes toegestaan."},400);
     const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id,is_open").eq("survey_year",2026).single();
     if(e||!s||(!testing&&!s.is_open))return reply({error:"De enquête is momenteel gesloten."},403);
-    const {error}=await adminDb.from(testing?"optsch_survey_test_responses":"optsch_survey_responses").insert({survey_id:s.id,answers:a});
+    const auto_flags=detectPersonalAttacks(a);
+    const {error}=await adminDb.from(testing?"optsch_survey_test_responses":"optsch_survey_responses").insert({survey_id:s.id,answers:a,auto_flags});
     if(error)throw error;
     return reply({ok:true,preview:testing},201);
   }
@@ -56,21 +87,28 @@ Deno.serve(async(req)=>{
     if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
     const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id").eq("survey_year",2026).single();
     if(e)throw e;
-    const rows:{id:string,answers:Record<string,unknown>,excluded_questions:string[]}[]=[];
+    const rows:{id:string,answers:Record<string,unknown>,excluded_questions:string[],approved_questions:string[],auto_flags:Record<string,string>}[]=[];
     const isTest=action==="test-results"||action==="test-moderation";
     let from=0; const page=500;
     while(true){
-      const {data,error}=await adminDb.from(isTest?"optsch_survey_test_responses":"optsch_survey_responses").select("id,answers,excluded_questions").eq("survey_id",s.id).order("created_at",{ascending:true}).range(from,from+page-1);
+      const {data,error}=await adminDb.from(isTest?"optsch_survey_test_responses":"optsch_survey_responses").select("id,answers,excluded_questions,approved_questions,auto_flags").eq("survey_id",s.id).order("created_at",{ascending:true}).range(from,from+page-1);
       if(error)throw error; rows.push(...(data||[])); if((data||[]).length<page)break; from+=page;
     }
     if(action==="moderation"||action==="test-moderation"){
-      return reply({count:rows.length,entries:rows.map(x=>({id:x.id,answers:x.answers,excluded_questions:x.excluded_questions||[]}))});
+      return reply({count:rows.length,entries:rows.map(x=>({id:x.id,answers:x.answers,excluded_questions:x.excluded_questions||[],approved_questions:x.approved_questions||[],auto_flags:x.auto_flags||{}}))});
     }
-    return reply({count:rows.length,answers:rows.map(x=>{
+    let pending_count=0;
+    const answers=rows.map(x=>{
       const a={...x.answers};
       for(const q of (x.excluded_questions||[])) delete a[q];
+      for(const q of Object.keys(x.auto_flags||{})){
+        if(!(x.approved_questions||[]).includes(q)&&!(x.excluded_questions||[]).includes(q)){
+          delete a[q];pending_count++;
+        }
+      }
       return a;
-    })});
+    });
+    return reply({count:rows.length,pending_count,answers});
   }
   if(req.method==="POST" && action==="set-moderation"){
     if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
@@ -78,19 +116,22 @@ Deno.serve(async(req)=>{
     const id=typeof b?.id==="string"?b.id:"";
     const question=typeof b?.question==="string"?b.question:"";
     const test=b?.test===true;
-    if(!/^[0-9a-fA-F-]{36}$/.test(id)||!questionIds.includes(question)||typeof b.exclude!=="boolean")
+    if(!/^[0-9a-fA-F-]{36}$/.test(id)||!OPEN_QUESTION_IDS.includes(question)||typeof b.exclude!=="boolean")
       return reply({error:"Ongeldige moderatieaanvraag"},400);
     const table=test?"optsch_survey_test_responses":"optsch_survey_responses";
     const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id").eq("survey_year",2026).single();
     if(e)throw e;
-    const {data:row,error:readError}=await adminDb.from(table).select("excluded_questions,answers").eq("survey_id",s.id).eq("id",id).maybeSingle();
+    const {data:row,error:readError}=await adminDb.from(table).select("excluded_questions,approved_questions,auto_flags,answers").eq("survey_id",s.id).eq("id",id).maybeSingle();
     if(readError)throw readError;
     if(!row)return reply({error:"Inzending niet gevonden"},404);
     const current=new Set<string>(row.excluded_questions||[]);
-    if(b.exclude) current.add(question);else current.delete(question);
-    const {error:updateError}=await adminDb.from(table).update({excluded_questions:[...current]}).eq("survey_id",s.id).eq("id",id);
+    const approved=new Set<string>(row.approved_questions||[]);
+    // Existing exclude=true marks inappropriate content; exclude=false approves it.
+    if(b.exclude){current.add(question);approved.delete(question);}
+    else{current.delete(question);approved.add(question);}
+    const {error:updateError}=await adminDb.from(table).update({excluded_questions:[...current],approved_questions:[...approved]}).eq("survey_id",s.id).eq("id",id);
     if(updateError)throw updateError;
-    return reply({ok:true,excluded_questions:[...current]});
+    return reply({ok:true,excluded_questions:[...current],approved_questions:[...approved]});
   }
   if(req.method==="POST" && action==="clear-test-results"){
     if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
