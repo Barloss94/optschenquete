@@ -46,3 +46,18 @@ Let op: vrije antwoorden kunnen door de invuller alsnog herkenbare informatie be
 ## AI-analyse
 
 Geen betaalde AI-API ingebouwd. Download als beheerder de CSV en upload deze indien gewenst in ChatGPT voor een kwalitatieve analyse en een onderzoeksverslag.
+
+## Proefmodus voor beheerders
+
+De echte enquête blijft gesloten zolang `is_open=false`. Om te testen:
+
+1. Log in op `admin.html` met het bestaande Ranking-beheerdersaccount.
+2. Klik op **Open proefenquête (alleen beheerders)**.
+3. Vul de vragen in en kies **Proefantwoord insturen**.
+4. Ga terug naar beheer en kies **Testresultaten**.
+5. Download eventueel de test-CSV.
+6. Kies **Testresultaten wissen** wanneer je klaar bent.
+
+De proefmodus vraagt een geldige Supabase-sessie van een gebruiker met rol `admin` en bewaart antwoorden uitsluitend in `public.optsch_survey_test_responses`. Deze proefantwoorden zijn gescheiden van de officiële enquêteresultaten en stellen geen browserblokkade in. Openbare deelnemers kunnen de proefmodus niet gebruiken.
+
+De URL-queryparameter `preview=1` op zichzelf geeft **geen toegang** tot de proefmodus: de Edge Function controleert de ingelogde beheerder aan serverzijde. Een volledig end-to-end praktijkonderzoek met een echt beheerdersaccount is nog nodig voordat het systeem publiek wordt geopend.
