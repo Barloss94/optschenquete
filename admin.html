@@ -1,11 +1,19 @@
-<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OPTSCH – Enquêtebeheer</title><style>:root{font:16px system-ui;background:#0b1323;color:#eaf1ff}*{box-sizing:border-box}main{max-width:1000px;margin:35px auto;padding:20px}.panel{background:#172337;border:1px solid #30435f;border-radius:16px;padding:22px;margin:18px 0}input{background:#10192b;color:white;border:1px solid #536a82;padding:12px;border-radius:9px;width:100%;margin:6px 0 13px;font:inherit}button{cursor:pointer;border:0;background:#72b9ff;padding:12px 20px;border-radius:9px;color:#0b1323;font-weight:700}button:disabled{opacity:.5}a{color:#9dceff}.muted{color:#b7c6d9}#report{white-space:pre-wrap;overflow-wrap:anywhere}.metrics{display:flex;gap:16px;flex-wrap:wrap}.metric{background:#23324b;border-radius:12px;padding:18px;min-width:180px}strong{font-size:30px}</style></head><body><main><p><a href="./index.html">← Terug naar enquête</a></p><h1>Enquêtebeheer 2026</h1><p class="muted">Alleen voor OPTSCH-beheerders. De enquête is publiek; deze resultatenpagina niet.</p><section id="login" class="panel"><h2>Inloggen</h2><form id="loginform"><label>E-mailadres<input id="email" type="email" autocomplete="username" required></label><label>Wachtwoord<input id="password" type="password" autocomplete="current-password" required></label><button type="submit">Inloggen</button></form></section><section id="dashboard" class="panel" hidden><div class="metrics"><div class="metric">Inzendingen<br><strong id="count">–</strong></div><div class="metric">Jaar<br><strong>2026</strong></div></div><p><a href="./index.html?preview=1" target="_blank" rel="noopener">Open proefenquête (alleen beheerders)</a></p>
+<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OPTSCH – Enquêtebeheer</title><style>:root{font:16px system-ui;background:#0b1323;color:#eaf1ff}*{box-sizing:border-box}main{max-width:1000px;margin:35px auto;padding:20px}.panel{background:#172337;border:1px solid #30435f;border-radius:16px;padding:22px;margin:18px 0}input{background:#10192b;color:white;border:1px solid #536a82;padding:12px;border-radius:9px;width:100%;margin:6px 0 13px;font:inherit}button{cursor:pointer;border:0;background:#72b9ff;padding:12px 20px;border-radius:9px;color:#0b1323;font-weight:700}button:disabled{opacity:.5}a{color:#9dceff}.muted{color:#b7c6d9}#report{white-space:pre-wrap;overflow-wrap:anywhere}.metrics{display:flex;gap:16px;flex-wrap:wrap}.metric{background:#23324b;border-radius:12px;padding:18px;min-width:180px}strong{font-size:30px}.moderation-entry{padding:14px;margin:12px 0;border:1px solid #39536f;border-radius:12px;white-space:normal}.moderation-answer{padding:13px;background:#1b2a40;border-left:4px solid #4e7aa2;margin:10px 0;border-radius:4px}.moderation-answer.pending{border-color:#e9a53e;background:#392c25}.moderation-answer.excluded{border-color:#d18474}.moderation-answer p{white-space:pre-wrap;overflow-wrap:anywhere}.moderation-answer button{padding:9px 12px;margin:4px 7px 4px 0;font-size:14px}.moderation-label{font-weight:700;color:#d6e6fb}details summary{cursor:pointer;padding:6px 0;font-weight:700}#moderationPanel[hidden]{display:none}#allOpen{width:auto;accent-color:#58a6ec} .notice{padding:12px;border-radius:9px;background:#332e1f} .mutedBadge{font-size:13px;color:#e6b359}</style></head><body><main><p><a href="./index.html">← Terug naar enquête</a></p><h1>Enquêtebeheer 2026</h1><p class="muted">Alleen voor OPTSCH-beheerders. De enquête is publiek; deze resultatenpagina niet.</p><section id="login" class="panel"><h2>Inloggen</h2><form id="loginform"><label>E-mailadres<input id="email" type="email" autocomplete="username" required></label><label>Wachtwoord<input id="password" type="password" autocomplete="current-password" required></label><button type="submit">Inloggen</button></form></section><section id="dashboard" class="panel" hidden><div class="metrics"><div class="metric">Inzendingen<br><strong id="count">–</strong></div><div class="metric">Jaar<br><strong>2026</strong></div></div><p><a href="./index.html?preview=1" target="_blank" rel="noopener">Open proefenquête (alleen beheerders)</a></p>
 <p><button id="live">Echte resultaten</button> <button id="tests">Testresultaten</button></p>
 <p><button id="refresh">Resultaten verversen</button> <button id="csv">Download anonieme CSV</button> <button id="clearTests" hidden>Testresultaten wissen</button> <button id="signout">Uitloggen</button></p>
+<p><button id="moderate">Controleer open antwoorden</button></p>
+<section id="moderationPanel" class="panel" hidden>
+<h3>Controle op persoonlijke aanvallen</h3>
+<p class="muted">Verdachte open antwoorden worden door de software gemarkeerd en tijdelijk uit de resultaten en CSV-export gehouden. Jij kunt ze alsnog goedkeuren of uitsluiten. Legitieme kritiek op OPTSCH mag blijven staan.</p>
+<label><input type="checkbox" id="allOpen"> Ook niet-gemarkeerde open antwoorden tonen</label>
+<p id="reviewSummary" class="notice"></p>
+<div id="moderationList"></div>
+</section>
 <h2 id="modeTitle">Echte resultaten per vraag</h2><div id="report"></div></section><p id="status" role="status"></p></main><script type="module">
 import{createClient}from"https://esm.sh/@supabase/supabase-js@2.95.0";
 const client=createClient("https://lnlaqrljtwrxtfsyotnn.supabase.co","sb_publishable_wXilWOoEC4fEBswRNtnWAw_MRQ0AooI");
 const API="https://lnlaqrljtwrxtfsyotnn.supabase.co/functions/v1/optsch-survey";
-const $=id=>document.getElementById(id);let answers=[];let currentMode="results";
+const $=id=>document.getElementById(id);let answers=[];let currentMode="results";let reviewEntries=[];
 const labels=["Afgelopen maand","Afgelopen 3 maanden","Afgelopen 6 maanden","Afgelopen 12 maanden","Ontwikkeling speelactiviteit","Toelichting speelactiviteit","Factoren deelname","Algemene tevredenheid","Wat behouden","Sfeer","Wat vermindert plezier","Verbetergebieden","Eerste verandering","Regels en afspraken","Regels aanpassen","Communicatie tevredenheid","Communicatie verbeteren","Luisteren naar spelers","Betrokkenheid","Wat missen spelers","Gewenste toevoegingen","Toekomstprioriteiten","Onderbelichte signalen","Overige opmerkingen"];
 function showError(err){$("status").textContent=err?.message||String(err)}
 async function query(mode=currentMode){
@@ -13,7 +21,7 @@ const {data:{session}}=await client.auth.getSession();
 if(!session)throw new Error("Je bent niet ingelogd.");
 const resp=await fetch(API+"?action="+mode,{headers:{Authorization:"Bearer "+session.access_token}});
 const data=await resp.json();if(!resp.ok)throw new Error(data.error||"Toegang geweigerd.");
-answers=data.answers;currentMode=mode;
+answers=data.answers;currentMode=mode;$("moderationPanel").hidden=true;$("moderate").textContent=(data.pending_count?"⚠ "+data.pending_count+" mogelijk ongepaste antwoorden te beoordelen":"✓ Geen automatische meldingen")+" – open antwoorden controleren";
 $("login").hidden=true;$("dashboard").hidden=false;$("count").textContent=data.count;
 $("modeTitle").textContent=mode==="test-results"?"Testresultaten per vraag":"Echte resultaten per vraag";
 $("csv").textContent=mode==="test-results"?"Download test-CSV":"Download anonieme CSV";
@@ -32,6 +40,63 @@ $("report").append(section);
 $("status").textContent="Resultaten bijgewerkt.";
 }
 $("loginform").onsubmit=async e=>{e.preventDefault();$("status").textContent="Bezig met inloggen…";const {error}=await client.auth.signInWithPassword({email:$("email").value,password:$("password").value});if(error)return showError(error);try{await query()}catch(e){showError(e);await client.auth.signOut()}};
+
+const openQuestions=new Set([6,9,11,13,15,20,23,24]);
+async function authenticatedCall(url,options={}){
+ const {data:{session}}=await client.auth.getSession();
+ if(!session)throw new Error("Log opnieuw in.");
+ const r=await fetch(url,{...options,headers:{Authorization:"Bearer "+session.access_token,...(options.headers||{})}});
+ const d=await r.json();if(!r.ok)throw Error(d.error||"Verwerking mislukt.");return d;
+}
+async function loadModeration(){
+ const isTest=currentMode==="test-results";
+ const data=await authenticatedCall(API+"?action="+(isTest?"test-moderation":"moderation"));
+ reviewEntries=data.entries||[];renderModeration();
+}
+function renderModeration(){
+ const container=$("moderationList");container.replaceChildren();
+ const includeAll=$("allOpen").checked;let pendingCount=0;let displayed=0;
+ for(const [i,entry] of reviewEntries.entries()){
+   const responseItems=Object.entries(entry.answers||{}).filter(([q,v])=>openQuestions.has(Number(q.slice(1)))&&typeof v==="string"&&v.trim());
+   for(const [q,v] of responseItems){
+     const flag=entry.auto_flags?.[q];
+     const excluded=(entry.excluded_questions||[]).includes(q);
+     const approved=(entry.approved_questions||[]).includes(q);
+     const pending=!!flag&&!excluded&&!approved;
+     if(pending)pendingCount++;
+     if(!includeAll&&!flag&&!excluded)continue;
+     displayed++;
+     const item=document.createElement("section");item.className="moderation-answer"+(pending?" pending":excluded?" excluded":"");
+     const heading=document.createElement("div");heading.className="moderation-label";heading.textContent="Inzending "+(i+1)+" · Vraag "+q.slice(1)+" – "+labels[Number(q.slice(1))-1];item.append(heading);
+     const status=document.createElement("p");status.className="mutedBadge";
+     status.textContent=excluded?"Uitgesloten uit rapport en CSV":pending?"AUTOMATISCH GEMARKEERD – "+flag:approved?"Beoordeeld en meegenomen":"Niet automatisch gemarkeerd";item.append(status);
+     const para=document.createElement("p");para.textContent=v;item.append(para);
+     async function decision(exclude){
+       try{
+        await authenticatedCall(API+"?action=set-moderation",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({id:entry.id,question:q,exclude,test:currentMode==="test-results"})
+        });
+        await query(currentMode);await loadModeration();$("moderationPanel").hidden=false;
+        $("status").textContent=exclude?"Antwoord uitgesloten van rapport en CSV.":"Antwoord goedgekeurd voor rapport en CSV.";
+       }catch(error){showError(error)}
+     }
+     if(!excluded){
+       const discard=document.createElement("button");discard.type="button";discard.textContent="Uitsluiten";discard.onclick=()=>decision(true);item.append(discard);
+     }
+     if(pending||excluded){
+       const approve=document.createElement("button");approve.type="button";approve.textContent="Toch meenemen";approve.onclick=()=>decision(false);item.append(approve);
+     }
+     container.append(item);
+   }
+ }
+ $("reviewSummary").textContent=pendingCount+" open antwoorden staan klaar voor beoordeling. "+displayed+" antwoorden worden hieronder getoond.";
+ if(!displayed){const p=document.createElement("p");p.textContent="Geen gemarkeerde open antwoorden. Selecteer de optie hierboven om alle open antwoorden te controleren.";container.append(p);}
+}
+$("moderate").onclick=async()=>{if(!$("moderationPanel").hidden){$("moderationPanel").hidden=true;return}
+ try{await loadModeration();$("moderationPanel").hidden=false;}catch(error){showError(error)}};
+$("allOpen").onchange=renderModeration;
+
 $("refresh").onclick=()=>query().catch(showError);
 $("live").onclick=()=>query("results").catch(showError);
 $("tests").onclick=()=>query("test-results").catch(showError);
