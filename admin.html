@@ -15,6 +15,7 @@ const client=createClient("https://lnlaqrljtwrxtfsyotnn.supabase.co","sb_publish
 const API="https://lnlaqrljtwrxtfsyotnn.supabase.co/functions/v1/optsch-survey";
 const $=id=>document.getElementById(id);let answers=[];let currentMode="results";let reviewEntries=[];
 const labels=["Afgelopen maand","Afgelopen 3 maanden","Afgelopen 6 maanden","Afgelopen 12 maanden","Ontwikkeling speelactiviteit","Toelichting speelactiviteit","Factoren deelname","Algemene tevredenheid","Wat behouden","Sfeer","Wat vermindert plezier","Verbetergebieden","Eerste verandering","Regels en afspraken","Regels aanpassen","Communicatie tevredenheid","Communicatie verbeteren","Luisteren naar spelers","Betrokkenheid","Wat missen spelers","Gewenste toevoegingen","Toekomstprioriteiten","Onderbelichte signalen","Overige opmerkingen"];
+labels.push(...["Wat zou OPTSCH kunnen veranderen zodat je (weer) vaker zou willen spelen?","Welke speeldagen of starttijden zouden jou beter uitkomen?","Welke verandering aan de kosten of inleg zou voor jou verschil maken?","Wat werkt voor jou niet goed in de pokerapp en wat zou je liever zien?","Wat moet OPTSCH als eerste verbeteren om jouw tevredenheid te vergroten?","Wat kan er in de onderlinge sfeer verbeteren? Beschrijf situaties zonder spelers te noemen.","Waarover wil je meer duidelijkheid, eerlijkheid of transparantie?","Bij welke regels of afspraken mis je duidelijkheid?","Welke informatie mis je of ontvang je te laat?","Hoe kan OPTSCH beter laten zien dat er naar spelers wordt geluisterd?","Welke concrete spelvariant, toernooivorm of activiteit zou je graag zien?"]);
 function showError(err){$("status").textContent=err?.message||String(err)}
 async function query(mode=currentMode){
 const {data:{session}}=await client.auth.getSession();
@@ -41,7 +42,7 @@ $("status").textContent="Resultaten bijgewerkt.";
 }
 $("loginform").onsubmit=async e=>{e.preventDefault();$("status").textContent="Bezig met inloggen…";const {error}=await client.auth.signInWithPassword({email:$("email").value,password:$("password").value});if(error)return showError(error);try{await query()}catch(e){showError(e);await client.auth.signOut()}};
 
-const openQuestions=new Set([6,9,11,13,15,20,23,24]);
+const openQuestions=new Set([6,9,11,13,15,20,23,24,25,26,27,28,29,30,31,32,33,34,35]);
 async function authenticatedCall(url,options={}){
  const {data:{session}}=await client.auth.getSession();
  if(!session)throw new Error("Log opnieuw in.");
