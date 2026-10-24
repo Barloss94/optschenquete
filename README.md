@@ -82,3 +82,28 @@ De vragen met vrije tekst worden door de server automatisch gescand op mogelijke
 De spelersnamen worden uitsluitend in het tijdelijke servergeheugen gebruikt, nooit met de openbare website gedeeld of aan PlayerID/ingezonden antwoorden gekoppeld. In `auto_flags` worden alleen neutrale signalen opgeslagen, bijvoorbeeld ‘Mogelijke vermelding van spelersnaam of alias’, zonder de gematchte naam.
 
 Het systeem markeert een naamvermelding voor handmatige beoordeling; een naam noemen is niet per definitie kwetsend. Het kan soms ook gewone Nederlandse woorden markeren. De beheerder beoordeelt daarom de context. Ook uitsluitingen gelden per open antwoord en niet per volledige enquête.
+
+
+## Adaptieve vervolgvragen (24 basisvragen + 11 optionele vervolgvragen)
+
+Het formulier toont extra open vragen direct na een relevante basisvraag. De hoofdvragen blijven voor alle deelnemers gelijk; de vervolgvragen verschijnen alleen wanneer het betreffende antwoord is geselecteerd. De vervolgvragen zijn optioneel.
+
+| Vervolgvraag | Geactiveerd door |
+| --- | --- |
+| q25 – Vaker deelnemen | q5: minder vaak, gestopt, wisselend of niet gespeeld |
+| q26 – Andere speeldagen / begintijden | q7: speeldagen of aanvangstijden |
+| q27 – Kosten / inleg | q7: kosten of inleg |
+| q28 – Problemen met de pokerapp | q7: pokerapp |
+| q29 – Algemene verbeterprioriteit | q8: tevredenheid 1 of 2 |
+| q30 – Sfeerverbetering | q10: negatief of zeer negatief |
+| q31 – Transparantie en regels | q12: eerlijkheid/transparantie of regels |
+| q32 – Onduidelijke regels | q14: wisselend of vaak onduidelijk/oneerlijk |
+| q33 – Ontbrekende communicatie | q16: tevredenheid 1 of 2 |
+| q34 – Betere inspraak | q18: meestal niet of nee |
+| q35 – Gewenste spelvariant / evenement | q21: een van de genoemde varianten, toernooivormen, speciale evenementen of teamactiviteiten |
+
+Verandert het antwoord op een basisvraag, dan verdwijnt een niet-relevante vervolgvraag en wordt de tekst gewist. De website verstuurt alleen relevante, daadwerkelijk ingevulde vervolgvragen. De Edge Function weigert antwoorden op verborgen (niet-geactiveerde) vervolgvragen. Het JSON-opslagmodel hoeft niet aangepast te worden. Het beheer en de CSV-export ondersteunen vaste kolommen **q1 t/m q35**; alleen weergegeven/ingevulde vervolgvragen krijgen een antwoord. Ook deze open antwoorden vallen onder automatische namencontrole en menselijke moderatie.
+
+### Controle
+
+De voorwaarden zijn op 11 scenario's getest, waaronder meerdere keuzes tegelijk en geen toepasselijke vervolgvragen. JavaScript-syntax van de website en beheerpagina is gecontroleerd. De serverfunctie is gedeployed naar Supabase; een end-to-end praktijktest met een beheerdersinzending blijft nodig. De publieke enquête staat nog gesloten.
