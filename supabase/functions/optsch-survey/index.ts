@@ -51,17 +51,46 @@ Deno.serve(async(req)=>{
     if(error)throw error;
     return reply({ok:true,preview:testing},201);
   }
-  if(req.method==="GET" && (action==="results"||action==="csv"||action==="test-results")){
+  if(req.method==="GET" && (action==="results"||action==="csv"||action==="test-results"||action==="moderation"||action==="test-moderation")){
+
     if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
     const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id").eq("survey_year",2026).single();
     if(e)throw e;
-    const rows=[];
+    const rows:{id:string,answers:Record<string,unknown>,excluded_questions:string[]}[]=[];
+    const isTest=action==="test-results"||action==="test-moderation";
     let from=0; const page=500;
     while(true){
-      const {data,error}=await adminDb.from(action==="test-results"?"optsch_survey_test_responses":"optsch_survey_responses").select("answers").eq("survey_id",s.id).order("created_at",{ascending:true}).range(from,from+page-1);
+      const {data,error}=await adminDb.from(isTest?"optsch_survey_test_responses":"optsch_survey_responses").select("id,answers,excluded_questions").eq("survey_id",s.id).order("created_at",{ascending:true}).range(from,from+page-1);
       if(error)throw error; rows.push(...(data||[])); if((data||[]).length<page)break; from+=page;
     }
-    return reply({count:rows.length,answers:rows.map(x=>x.answers)});
+    if(action==="moderation"||action==="test-moderation"){
+      return reply({count:rows.length,entries:rows.map(x=>({id:x.id,answers:x.answers,excluded_questions:x.excluded_questions||[]}))});
+    }
+    return reply({count:rows.length,answers:rows.map(x=>{
+      const a={...x.answers};
+      for(const q of (x.excluded_questions||[])) delete a[q];
+      return a;
+    })});
+  }
+  if(req.method==="POST" && action==="set-moderation"){
+    if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
+    const b=await req.json();
+    const id=typeof b?.id==="string"?b.id:"";
+    const question=typeof b?.question==="string"?b.question:"";
+    const test=b?.test===true;
+    if(!/^[0-9a-fA-F-]{36}$/.test(id)||!questionIds.includes(question)||typeof b.exclude!=="boolean")
+      return reply({error:"Ongeldige moderatieaanvraag"},400);
+    const table=test?"optsch_survey_test_responses":"optsch_survey_responses";
+    const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id").eq("survey_year",2026).single();
+    if(e)throw e;
+    const {data:row,error:readError}=await adminDb.from(table).select("excluded_questions,answers").eq("survey_id",s.id).eq("id",id).maybeSingle();
+    if(readError)throw readError;
+    if(!row)return reply({error:"Inzending niet gevonden"},404);
+    const current=new Set<string>(row.excluded_questions||[]);
+    if(b.exclude) current.add(question);else current.delete(question);
+    const {error:updateError}=await adminDb.from(table).update({excluded_questions:[...current]}).eq("survey_id",s.id).eq("id",id);
+    if(updateError)throw updateError;
+    return reply({ok:true,excluded_questions:[...current]});
   }
   if(req.method==="POST" && action==="clear-test-results"){
     if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
