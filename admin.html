@@ -1,0 +1,36 @@
+<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OPTSCH – Enquêtebeheer</title><style>:root{font:16px system-ui;background:#0b1323;color:#eaf1ff}*{box-sizing:border-box}main{max-width:1000px;margin:35px auto;padding:20px}.panel{background:#172337;border:1px solid #30435f;border-radius:16px;padding:22px;margin:18px 0}input{background:#10192b;color:white;border:1px solid #536a82;padding:12px;border-radius:9px;width:100%;margin:6px 0 13px;font:inherit}button{cursor:pointer;border:0;background:#72b9ff;padding:12px 20px;border-radius:9px;color:#0b1323;font-weight:700}button:disabled{opacity:.5}a{color:#9dceff}.muted{color:#b7c6d9}#report{white-space:pre-wrap;overflow-wrap:anywhere}.metrics{display:flex;gap:16px;flex-wrap:wrap}.metric{background:#23324b;border-radius:12px;padding:18px;min-width:180px}strong{font-size:30px}</style></head><body><main><p><a href="./index.html">← Terug naar enquête</a></p><h1>Enquêtebeheer 2026</h1><p class="muted">Alleen voor OPTSCH-beheerders. De enquête is publiek; deze resultatenpagina niet.</p><section id="login" class="panel"><h2>Inloggen</h2><form id="loginform"><label>E-mailadres<input id="email" type="email" autocomplete="username" required></label><label>Wachtwoord<input id="password" type="password" autocomplete="current-password" required></label><button type="submit">Inloggen</button></form></section><section id="dashboard" class="panel" hidden><div class="metrics"><div class="metric">Inzendingen<br><strong id="count">–</strong></div><div class="metric">Jaar<br><strong>2026</strong></div></div><p><button id="refresh">Resultaten verversen</button> <button id="csv">Download anonieme CSV</button> <button id="signout">Uitloggen</button></p><h2>Resultaten per vraag</h2><div id="report"></div></section><p id="status" role="status"></p></main><script type="module">
+import{createClient}from"https://esm.sh/@supabase/supabase-js@2.95.0";
+const client=createClient("https://lnlaqrljtwrxtfsyotnn.supabase.co","sb_publishable_wXilWOoEC4fEBswRNtnWAw_MRQ0AooI");
+const API="https://lnlaqrljtwrxtfsyotnn.supabase.co/functions/v1/optsch-survey";
+const $=id=>document.getElementById(id);let answers=[];
+const labels=["Afgelopen maand","Afgelopen 3 maanden","Afgelopen 6 maanden","Afgelopen 12 maanden","Ontwikkeling speelactiviteit","Toelichting speelactiviteit","Factoren deelname","Algemene tevredenheid","Wat behouden","Sfeer","Wat vermindert plezier","Verbetergebieden","Eerste verandering","Regels en afspraken","Regels aanpassen","Communicatie tevredenheid","Communicatie verbeteren","Luisteren naar spelers","Betrokkenheid","Wat missen spelers","Gewenste toevoegingen","Toekomstprioriteiten","Onderbelichte signalen","Overige opmerkingen"];
+function showError(err){$("status").textContent=err?.message||String(err)}
+async function query(){
+const {data:{session}}=await client.auth.getSession();
+if(!session)throw new Error("Je bent niet ingelogd.");
+const resp=await fetch(API+"?action=results",{headers:{Authorization:"Bearer "+session.access_token}});
+const data=await resp.json();if(!resp.ok)throw new Error(data.error||"Toegang geweigerd.");
+answers=data.answers;$("login").hidden=true;$("dashboard").hidden=false;$("count").textContent=data.count;
+$("report").replaceChildren();
+labels.forEach((label,i)=>{
+const key="q"+(i+1),section=document.createElement("section");section.className="panel";const title=document.createElement("h3");title.textContent=(i+1)+". "+label;section.append(title);
+const vals=answers.map(a=>a[key]).filter(v=>v!==null&&v!==undefined&&v!==""&&(!Array.isArray(v)||v.length));
+const info=document.createElement("p");info.className="muted";info.textContent=vals.length+" antwoorden";section.append(info);
+if([0,1,2,3,4,6,7,9,11,13,15,16,17,18,20,21].includes(i)){
+const counts={};for(const v of vals){for(const x of(Array.isArray(v)?v:[v]))counts[x]=(counts[x]||0)+1}
+const list=document.createElement("ul");for(const [k,v] of Object.entries(counts).sort((a,b)=>b[1]-a[1])){const li=document.createElement("li");li.textContent=k+": "+v;list.append(li);}section.append(list);
+}else{const list=document.createElement("ol");for(const v of vals){const li=document.createElement("li");li.textContent=String(v);list.append(li);}section.append(list);}
+$("report").append(section);
+});
+$("status").textContent="Resultaten bijgewerkt.";
+}
+$("loginform").onsubmit=async e=>{e.preventDefault();$("status").textContent="Bezig met inloggen…";const {error}=await client.auth.signInWithPassword({email:$("email").value,password:$("password").value});if(error)return showError(error);try{await query()}catch(e){showError(e);await client.auth.signOut()}};
+$("refresh").onclick=()=>query().catch(showError);
+$("signout").onclick=async()=>{await client.auth.signOut();$("dashboard").hidden=true;$("login").hidden=false;$("status").textContent="Uitgelogd."};
+$("csv").onclick=()=>{
+const headers=labels.map((l,i)=>"Vraag "+(i+1)+" - "+l);const clean=v=>'"'+String(v??"").replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"';
+const content="\ufeff"+[headers.map(clean).join(";"),...answers.map(a=>labels.map((_,i)=>clean(Array.isArray(a["q"+(i+1)])?a["q"+(i+1)].join(" | "):a["q"+(i+1)])).join(";"))].join("\r\n");
+const blob=new Blob([content],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),anchor=document.createElement("a");anchor.href=url;anchor.download="OPTSCH_spelersenquete_2026_anoniem.csv";anchor.click();URL.revokeObjectURL(url);
+};
+const{data:{session}}=await client.auth.getSession();if(session){try{await query()}catch(e){showError(e)}}
+</script></body></html>
