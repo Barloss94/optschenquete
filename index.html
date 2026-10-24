@@ -1,6 +1,17 @@
 <!doctype html><html lang="nl"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#101a2d"/><title>OPTSCH – Spelersenquête</title><style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#e9eef8;background:#0b1323;font-size:16px}*{box-sizing:border-box}body{margin:0}main{max-width:760px;margin:auto;padding:28px 16px 80px}.hero{background:linear-gradient(120deg,#173965,#182c42);border-radius:24px;padding:30px;margin-bottom:22px}h1{font-size:clamp(28px,5vw,42px);margin:0 0 12px}h2{font-size:20px}.muted{color:#b6c7de;line-height:1.65}.card{background:#141f32;padding:22px;border:1px solid #2a3b54;border-radius:18px;margin:16px 0}.card label.q{display:block;font-weight:700;font-size:17px;margin-bottom:14px}.card input[type=number],textarea,.login{width:100%;font:inherit;border:1px solid #47617c;border-radius:10px;background:#0c1728;color:white;padding:12px}textarea{min-height:110px;resize:vertical}.choice{display:flex;gap:10px;align-items:flex-start;margin:10px 0;line-height:1.4}.choice input{accent-color:#72b9ff;margin-top:4px}.btn{border:0;background:#58a6ec;color:#071322;font-weight:800;border-radius:12px;padding:14px 22px;cursor:pointer;font-size:16px}.btn:disabled{opacity:.55;cursor:default}.status{padding:16px;border-radius:12px;background:#21334b;margin:14px 0}.hidden{display:none}.top{display:flex;justify-content:space-between;gap:10px;align-items:center}a{color:#9bceff}.small{font-size:13px}.step{color:#90bfef;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px}#honeypot{position:absolute;left:-10000px}</style></head><body><main><header class="hero"><div class="step">Spelersonderzoek 2026</div><h1>Jouw stem, onze toekomst.</h1><p class="muted">Wat gaat goed bij OPTSCH, wat kan beter en wat zou jij graag toegevoegd zien? Deel jouw mening, ook als je minder vaak speelt. De enquête vraagt niet naar je naam, e-mailadres of PlayerID.</p><p class="small muted">open antwoorden zijn optioneel · geschatte invultijd 10–12 minuten</p></header><div id="state" class="status">Enquête controleren…</div><form id="survey" class="hidden" autocomplete="off"><div id="fields"></div><div id="honeypot"><label>Website<input name="website" tabindex="-1"></label></div><p class="small muted">Na versturen kunnen antwoorden niet meer gewijzigd worden. Antwoorden kunnen mogelijk herkenbare details bevatten; noem liever geen namen.</p><button id="send" class="btn" type="submit">Antwoorden definitief insturen</button></form><footer class="small muted">OPTSCH · <a href="./admin.html">Beheer</a></footer></main><script>
 const BASE="https://lnlaqrljtwrxtfsyotnn.supabase.co/functions/v1/optsch-survey";
+const PREVIEW=new URLSearchParams(location.search).get("preview")==="1";
+let previewClient=null;
+async function adminToken(){
+ if(!previewClient){
+  const {createClient}=await import("https://esm.sh/@supabase/supabase-js@2.95.0");
+  previewClient=createClient("https://lnlaqrljtwrxtfsyotnn.supabase.co","sb_publishable_wXilWOoEC4fEBswRNtnWAw_MRQ0AooI");
+ }
+ const {data:{session},error}=await previewClient.auth.getSession();
+ if(error||!session)throw Error("Log eerst in op de beheerpagina en open daar de proefmodus.");
+ return session.access_token;
+}
 const QUESTIONS=[["Afgelopen maand","number"],["Afgelopen 3 maanden","number"],["Afgelopen 6 maanden","number"],["Afgelopen 12 maanden","number"],["Hoe heeft jouw speelactiviteit zich ontwikkeld?","single",["Ik speel vaker","Ik speel minder vaak","Ongeveer even vaak","Mijn deelname wisselt","Ik ben pas begonnen","Ik ben gestopt","Ik heb niet gespeeld","Weet ik niet"]],["Wat zijn de redenen voor jouw speelactiviteit en eventuele veranderingen?","text"],["Welke factoren zorgen ervoor dat je niet vaker speelt?","multi",["Onvoldoende tijd","Speeldagen","Aanvangstijden","Kosten of inleg","Het aanbod","Andere pokergroepen","Pokerapp","Sfeer of organisatie","Persoonlijke omstandigheden","Ik speel al zo vaak als ik wil","Anders"]],["Hoe tevreden ben je over OPTSCH als geheel?","single",["1 - Zeer ontevreden","2","3","4","5 - Zeer tevreden"]],["Wat waardeer je het meest aan OPTSCH en wat moeten we behouden?","text"],["Hoe ervaar je de sfeer tussen spelers?","single",["Zeer positief","Positief","Neutraal","Negatief","Zeer negatief","Geen mening"]],["Zijn er dingen die je spelplezier verminderen?","text"],["Op welke gebieden zou OPTSCH het meest kunnen verbeteren? (maximaal 3)","multi3",["Communicatie","Organisatie en planning","Sfeer","Toernooien en activiteiten","Regels","Eerlijkheid en transparantie","Inspraak","Kosten en prijzen","Pokerapp","Digitale voorzieningen","Geen verbeterpunten","Anders"]],["Welke verandering zou jij als eerste doorvoeren en waarom?","text"],["Hoe ervaar je de regels en afspraken?","single",["Duidelijk en eerlijk","Overwegend duidelijk en eerlijk","Wisselend","Vaak onduidelijk of oneerlijk","Geen mening"]],["Welke regels of werkwijzen zou je aanpassen?","text"],["Hoe tevreden ben je over de communicatie?","single",["1 - Zeer ontevreden","2","3","4","5 - Zeer tevreden","Geen mening"]],["Wat kan er beter aan de communicatie?","multi",["Eerder informeren","Regels duidelijker uitleggen","Meer uitleg bij beslissingen","Vaker updates","Overzichtelijkere informatie","Meer mogelijkheden voor vragen","Ik ben tevreden","Anders"]],["Wordt er volgens jou naar spelers geluisterd?","single",["Ja, absoluut","Meestal wel","Soms wel, soms niet","Meestal niet","Nee","Geen ervaring"]],["Hoe wil je betrokken worden bij beslissingen?","multi",["Periodieke enquêtes","Voorstellen vooraf delen","Spelers laten stemmen","Ideeënbus","Direct overleg","Niet actief betrokken","Anders"]],["Wat mis jij momenteel bij OPTSCH?","text"],["Welke toevoegingen spreken jou het meest aan? (maximaal 3)","multi3",["Meer pokervarianten","Nieuwe toernooivormen","Bijzondere evenementen","Teamactiviteiten","Recreatieve activiteiten","Nieuwe pokerapp-mogelijkheden","Betere OPTSCH-website of app","Prijzen en beloningen","Meer onderling contact","Huidige aanbod is prima","Anders"]],["Wat moet OPTSCH de komende jaren vooral nastreven? (maximaal 3)","multi3",["Gezelligheid behouden","Competitie versterken","Meer afwisseling","Nieuwe spelers aantrekken","Spelers betrokken houden","Betaalbaar blijven","Vernieuwen","Huidige opzet behouden","Anders"]],["Welke zorgen of onderwerpen onder spelers krijgen te weinig aandacht?","text"],["Wat wil je verder nog delen met de organisatie?","text"]];
 const required=new Set([1,2,3,4,5,8,10,12,14,16,18,19,21,22]);
 const submitted="optsch_survey_2026_submitted";
@@ -15,9 +26,24 @@ if(type==="single"||type.startsWith("multi"))field=options.map((opt,j)=>'<label 
 return intro+'<section class="card"><label class="q" for="'+id+'">'+n+'. '+escapeHtml(label)+(required.has(n)?' <span aria-label="verplicht">*</span>':"")+'</label>'+field+'</section>';
 }).join("");
 async function init(){
- if(localStorage.getItem(submitted)){state.textContent="Je hebt deze enquête al ingevuld. Bedankt voor je deelname!";return;}
- try{const r=await fetch(BASE+"?action=status");if(!r.ok)throw Error();const d=await r.json(); if(!d.survey?.is_open){state.textContent="De enquête is nog niet geopend.";return;}state.classList.add("hidden");form.classList.remove("hidden");}
- catch{state.textContent="De enquête is tijdelijk niet beschikbaar. Probeer het later opnieuw."}
+ if(!PREVIEW && localStorage.getItem(submitted)){state.textContent="Je hebt deze enquête al ingevuld. Bedankt voor je deelname!";return;}
+ try{
+  const token=PREVIEW?await adminToken():null;
+  const r=await fetch(BASE+"?action="+(PREVIEW?"preview-status":"status"),
+    PREVIEW?{headers:{Authorization:"Bearer "+token}}:{});
+  const d=await r.json();
+  if(!r.ok)throw Error(d.error||"Status ophalen mislukt.");
+  if(!d.survey?.is_open){state.textContent="De enquête is nog niet geopend.";return;}
+  if(PREVIEW){
+    state.textContent="PROEFMODUS VOOR BEHEERDERS — Inzendingen worden apart opgeslagen en tellen niet mee bij de definitieve resultaten.";
+    const send=document.getElementById("send");send.textContent="Proefantwoord insturen";
+    const back=document.createElement("a");back.href="./admin.html";back.textContent=" ← Terug naar beheer";
+    state.append(back);
+  }else state.classList.add("hidden");
+  form.classList.remove("hidden");
+ }catch(error){
+  state.textContent=PREVIEW?(error?.message||"Geen toegang tot de proefmodus."):"De enquête is tijdelijk niet beschikbaar. Probeer het later opnieuw.";
+ }
 }
 form.addEventListener("change",e=>{const id=e.target.name; if(!["q12","q21","q22"].includes(id)||!e.target.checked)return;const checks=[...form.querySelectorAll('[name="'+id+'"]:checked')];if(checks.length>3){e.target.checked=false;alert("Kies maximaal 3 antwoorden.");}});
 form.addEventListener("submit",async e=>{
@@ -25,8 +51,18 @@ form.addEventListener("submit",async e=>{
  for(let i=1;i<=24;i++){const id="q"+i,[_,type]=QUESTIONS[i-1]; const els=[...form.querySelectorAll('[name="'+id+'"]')];a[id]=type.startsWith("multi")?els.filter(el=>el.checked).map(el=>el.value):type==="single"?(els.find(el=>el.checked)?.value||""):els[0]?.value.trim()||"";}
  const ns=[1,2,3,4].map(n=>Number(a["q"+n]));if(ns.some((n,i)=>i>0&&n<ns[i-1])){alert("Een langere periode kan niet minder deelnames bevatten dan een kortere periode.");return;}
  btn.disabled=true;btn.textContent="Versturen…";
- try{const response=await fetch(BASE+"?action=submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answers:a,website:form.elements.website.value})});const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||"Versturen mislukt");localStorage.setItem(submitted,"1");form.classList.add("hidden");state.classList.remove("hidden");state.textContent="Bedankt! Je antwoorden zijn anoniem ontvangen.";}
- catch(error){alert(error.message||"Er ging iets mis. Probeer opnieuw.");btn.disabled=false;btn.textContent="Antwoorden definitief insturen";}
+ try{
+  const token=PREVIEW?await adminToken():null;
+  const response=await fetch(BASE+"?action="+(PREVIEW?"preview-submit":"submit"),{
+   method:"POST",headers:{"Content-Type":"application/json",...(PREVIEW?{Authorization:"Bearer "+token}:{})},
+   body:JSON.stringify({answers:a,website:form.elements.website.value})
+  });
+  const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||"Versturen mislukt");
+  if(!PREVIEW)localStorage.setItem(submitted,"1");
+  form.classList.add("hidden");state.classList.remove("hidden");
+  state.textContent=PREVIEW?"Proefantwoord succesvol opgeslagen. Het telt niet mee bij de echte antwoorden.":"Bedankt! Je antwoorden zijn anoniem ontvangen.";
+  if(PREVIEW){const link=document.createElement("a");link.href="./admin.html";link.textContent=" Terug naar beheer";state.append(link);}
+ }catch(error){alert(error.message||"Er ging iets mis. Probeer opnieuw.");btn.disabled=false;btn.textContent=PREVIEW?"Proefantwoord insturen":"Antwoorden definitief insturen";}
 });
 init();
 </script></body></html>
