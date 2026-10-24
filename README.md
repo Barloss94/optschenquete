@@ -61,3 +61,15 @@ De echte enquête blijft gesloten zolang `is_open=false`. Om te testen:
 De proefmodus vraagt een geldige Supabase-sessie van een gebruiker met rol `admin` en bewaart antwoorden uitsluitend in `public.optsch_survey_test_responses`. Deze proefantwoorden zijn gescheiden van de officiële enquêteresultaten en stellen geen browserblokkade in. Openbare deelnemers kunnen de proefmodus niet gebruiken.
 
 De URL-queryparameter `preview=1` op zichzelf geeft **geen toegang** tot de proefmodus: de Edge Function controleert de ingelogde beheerder aan serverzijde. Een volledig end-to-end praktijkonderzoek met een echt beheerdersaccount is nog nodig voordat het systeem publiek wordt geopend.
+
+## Moderatie van persoonlijke aanvallen
+
+De enquête is bedoeld voor constructieve feedback over OPTSCH als geheel, niet voor het beledigen of zwartmaken van afzonderlijke spelers. Deze huisregel staat ook op de openbare enquêtepagina.
+
+- Bij een nieuwe inzending controleert de Edge Function alleen de open tekstvelden op **signalen** zoals gerichte scheldwoorden, persoonlijke beschuldigingen en mogelijke naamvermeldingen.
+- Gemarkeerde vraagantwoorden gaan naar een wachtrij. Zolang ze niet beoordeeld zijn, worden ze **niet opgenomen** in statistieken of de normale CSV-export.
+- In `admin.html` opent **Controleer open antwoorden** het moderatieoverzicht. Beheerders kiezen per antwoord **Toch meenemen** (toelaatbaar) of **Uitsluiten** (persoonlijke aanval).
+- Een uitsluiting geldt **per vraagantwoord**, niet automatisch voor de hele inzending. Andere antwoorden blijven behouden.
+- Beheerders kunnen ook niet-gemarkeerde antwoorden controleren; automatische herkenning is niet volledig en kan zowel iets missen als onschuldige kritiek markeren.
+- De beveiligde reviewinterface toont de oorspronkelijke tekst; normale rapportages en CSV's tonen alleen goedgekeurde of niet-gemarkeerde antwoorden.
+- Geen betaalde AI-dienst nodig: het huidige systeem gebruikt transparante tekstherkenning met vaste patronen. Pas op voor fout-positieven en gemiste beledigingen, en controleer alle vrije reacties handmatig vóór externe rapportage.
