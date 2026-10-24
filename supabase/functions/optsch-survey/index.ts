@@ -21,12 +21,15 @@ Deno.serve(async(req)=>{
  try {
   const u=new URL(req.url);
   const action=u.searchParams.get("action");
-  if(req.method==="GET" && action==="status") {
+  if(req.method==="GET" && (action==="status" || action==="preview-status")) {
+    if(action==="preview-status" && !await isAdmin(req)) return reply({error:"Geen beheerdersrechten"},403);
     const {data,error}=await adminDb.from("optsch_surveys").select("id,title,survey_year,is_open").eq("survey_year",2026).single();
     if(error) throw error;
-    return reply({survey:data});
+    return reply({survey:action==="preview-status" ? {...data,is_open:true,preview:true} : data});
   }
-  if(req.method==="POST" && action==="submit"){
+  if(req.method==="POST" && (action==="submit" || action==="preview-submit")){
+    const testing=action==="preview-submit";
+    if(testing && !await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
     if(Number(req.headers.get("content-length")||0)>30000) return reply({error:"Inzending te groot"},413);
     const b=await req.json();
     if(b?.website) return reply({ok:true});
@@ -43,22 +46,30 @@ Deno.serve(async(req)=>{
     for(const id of ["q5","q8","q10","q12","q14","q16","q18","q19","q21","q22"])if(!a[id]||(Array.isArray(a[id])&&!a[id].length))return reply({error:"Verplichte vraag ontbreekt: "+id},400);
     for(const id of ["q12","q21","q22"])if((a[id]||[]).length>3)return reply({error:"Maximaal drie keuzes toegestaan."},400);
     const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id,is_open").eq("survey_year",2026).single();
-    if(e||!s?.is_open)return reply({error:"De enquête is momenteel gesloten."},403);
-    const {error}=await adminDb.from("optsch_survey_responses").insert({survey_id:s.id,answers:a});
+    if(e||!s||(!testing&&!s.is_open))return reply({error:"De enquête is momenteel gesloten."},403);
+    const {error}=await adminDb.from(testing?"optsch_survey_test_responses":"optsch_survey_responses").insert({survey_id:s.id,answers:a});
     if(error)throw error;
-    return reply({ok:true},201);
+    return reply({ok:true,preview:testing},201);
   }
-  if(req.method==="GET" && (action==="results"||action==="csv")){
+  if(req.method==="GET" && (action==="results"||action==="csv"||action==="test-results")){
     if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
     const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id").eq("survey_year",2026).single();
     if(e)throw e;
     const rows=[];
     let from=0; const page=500;
     while(true){
-      const {data,error}=await adminDb.from("optsch_survey_responses").select("answers").eq("survey_id",s.id).order("created_at",{ascending:true}).range(from,from+page-1);
+      const {data,error}=await adminDb.from(action==="test-results"?"optsch_survey_test_responses":"optsch_survey_responses").select("answers").eq("survey_id",s.id).order("created_at",{ascending:true}).range(from,from+page-1);
       if(error)throw error; rows.push(...(data||[])); if((data||[]).length<page)break; from+=page;
     }
     return reply({count:rows.length,answers:rows.map(x=>x.answers)});
+  }
+  if(req.method==="POST" && action==="clear-test-results"){
+    if(!await isAdmin(req))return reply({error:"Geen beheerdersrechten"},403);
+    const {data:s,error:e}=await adminDb.from("optsch_surveys").select("id").eq("survey_year",2026).single();
+    if(e)throw e;
+    const {error}=await adminDb.from("optsch_survey_test_responses").delete().eq("survey_id",s.id);
+    if(error)throw error;
+    return reply({ok:true});
   }
   return reply({error:"Onbekende actie"},404);
  } catch(error){console.error("optsch-survey request failed:", error instanceof Error ? error.message : String(error));return reply({error:"Er is een technische fout opgetreden."},500);}
